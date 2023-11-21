@@ -1,0 +1,78 @@
+# Burp imports
+from burp import IBurpExtender, ITab, IContextMenuFactory, IHttpService
+
+# Jython specific imports for the GUI
+from javax import swing
+from java.awt import BorderLayout
+from java.util import ArrayList
+from java.net import URL
+
+# stdlib
+import sys
+
+try:
+    from exceptions_fix import FixBurpExceptions
+except ImportError:
+    pass
+
+class BurpExtender(IBurpExtender, ITab, IContextMenuFactory, IHttpService):
+    def registerExtenderCallbacks(self, callbacks):
+        
+        # Required for easier debugging: 
+        sys.stdout = callbacks.getStdout()
+
+        # Keep a reference to our callbacks object
+        self.callbacks = callbacks
+
+        # Obtain an extension helpers object
+        self.helpers = callbacks.getHelpers()
+
+        # Set our extension name
+        self.callbacks.setExtensionName("Help with scope!")
+
+        # Create a context menu
+        callbacks.registerContextMenuFactory(self)
+        return
+
+    def createMenuItems(self, invocation):
+        """Adds the extension to the context menu that 
+        appears when you right-click an object.
+        """
+        self.context = invocation
+        itemContext = invocation.getSelectedMessages()
+        
+        # Only return a menu item if right clicking on a 
+        # HTTP object
+        if itemContext > 0:
+        
+            # Must return a Java list 
+            menuList = ArrayList()
+            menuItem = swing.JMenuItem("Remove this host from scope",
+                                        actionPerformed=self.handleHttpTraffic)
+            menuList.add(menuItem)
+            return menuList
+        return None
+
+    def handleHttpTraffic(self, event):
+        self.sendURLToScope()
+        httpTraffic = self.context.getSelectedMessages()
+        for item in httpTraffic:
+            self.httpService = item.getHttpService()
+
+    def sendURLToScope(self):
+        list = []
+        httpTraffic = self.context.getSelectedMessages()
+        for item in httpTraffic:
+            url = item.getHttpService().getHost()
+            protocol = item.getHttpService().getProtocol()
+            url = (protocol+'://'+url)
+            if url not in list:
+                list.append(url)
+
+        for itens in list:
+            self.callbacks.excludeFromScope(URL(itens))
+
+try:
+    FixBurpExceptions()
+except:
+    pass
